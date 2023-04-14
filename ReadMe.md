@@ -88,5 +88,7 @@ Well some times you just need to dive in:
 
 ## Known issues
 A version based on ADSI of the export process may be in the making for use on a Windows client without the ActiveDirectory module.
-Support for non-inherited access in `ntSecurityDescriptor` is probably in the cards for the future.
+
+Support for non-inherited access in `ntSecurityDescriptor` is also probably in the cards for the future.
+
 This is the first version, so please report suggestions and/or improvements.

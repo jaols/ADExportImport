@@ -1,4 +1,4 @@
-# Active Direcvtory Export & Import
+# Active Directory Export & Import
 
 ## Introduction
 This solution is intended for creating the Active Directory (AD) structure on a development platform using an existing Active Dirtectory as source. It is **NOT** a backup/restore process and will **NOT** create identical objects at the target AD. But you will get a complete set of objects with most AD-attributes set from the source AD but transformed according to the target environment.

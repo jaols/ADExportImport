@@ -1,0 +1,38 @@
+{
+    "Replacements": {
+        "MailAddress": "@DevContoso.com"        
+    },
+    "StandardUserPassword": "TryThis4APassword!",    
+    "ImportExcludeAttributes": [
+        "CN",
+        "Members",
+        "GroupScope",
+        "GroupCategory",
+        "publicDelegatesBL",
+        "MemberOf",
+        "Enabled",
+        "telephone",
+        "SurName",
+        "Office",
+        "EmailAddress",
+        "City",
+        "MobilePhone",
+        "OfficePhone",
+        "Country",
+        "PrimaryGroup"
+    ],
+    "ExcludePrincipals": [
+        "Account Operators",
+        "Domain Admins",
+        "ENTERPRISE DOMAIN CONTROLLERS",
+        "Print Operators",
+        "Authenticated Users",
+        "SYSTEM",
+        "SELF",
+        "RAS and IAS Servers",
+        "Cert Publishers",
+        "Windows Authorization Access Group",
+        "Terminal Server License Servers",
+        "Pre-Windows 2000 Compatible Access"
+    ]
+}

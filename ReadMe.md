@@ -60,7 +60,7 @@ The provided example files includes these standard argument settings:
 |`StandardUserPassword`|Password to use for each created user. It is possible to use the setting `(New-RandomPassword -PaswordLength 12)` to get a password at runtime.|
 |`ImportExcludeAttributes`|List of properties to exclude from the import data (the target AD may be missing some attributes)|
 
-You may add more default arguments to the setting files. It is also possible to have separated settings for each `ps1` file.
+You may add more default arguments to the setting files. It is also possible to have separated settings for each `ps1` file or a combination (see [PSJumpStart](https://github.com/jaols/PSJumpStart/tree/master/PSJumpStart) for details).
 
 ### A few words on `Replacements`
 One of the key features in this solution is the use of a set of replacment strings to use for generating generic data export files. These replacments need to be translated to new values at the target AD. 

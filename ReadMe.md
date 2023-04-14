@@ -76,10 +76,6 @@ The default tag for replacments is `¤` so the string `¤DomainLDAP¤` is replac
 
 The order of the replacement content is important as you do not want to replace domain short name before the DomainLDAP.
 
-### Resulting `json` data file
-The standard file name is , but you may change this by using the script argument
-Some words on the resulting `json` data files. 
-
 ## Down the rabbit hole
 Well some times you just need to dive in:
 - The member list for a group will be cleaned from non-existing principals before used in `Import-AdGroups.ps1`. 

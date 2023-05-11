@@ -11,7 +11,8 @@
 	Use to set property values
 .Notes
     Author: Jack Olsson
-    Changes:
+    Changes: 
+    2023-05-11 New-AdUser cannot create a user with comma in it´s name without the samAccountName option
 #>
 [CmdletBinding(SupportsShouldProcess = $True)]
 param (    
@@ -103,6 +104,7 @@ Msg "Start Execution"
 
 Write-Verbose "Read data from $ImportFile"
 
+$samAccountNameProperty="samAccountName|String"
 $nameProperty="Name|String"
 $stdPassword = ConvertTo-SecureString $StandardUserPassword -AsPlainText -Force
 $ReplaceStrings=Get-ReplaceStrings $Replacements
@@ -126,7 +128,7 @@ foreach($objectItem in $ObjectList.psobject.properties.name) {
             Msg "Create $objectItem"
             try {
                 #Create a virgin oobject
-                New-ADUser -Name $objectProperties.$nameProperty -Path $parentOu -AccountPassword $stdPassword
+                New-ADUser -samAccountName $objectProperties.$samAccountNameProperty -Name $objectProperties.$nameProperty -Path $parentOu -AccountPassword $stdPassword
                 $targetObject=$objectItem
             } catch {
                 Msg ("Failed to create [" + $objectProperties.$nameProperty + "] in $parentOu. $PSItem") -Type ERROR

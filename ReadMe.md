@@ -78,6 +78,7 @@ The order of the replacement content is important as you do not want to replace 
 
 ## Down the rabbit hole
 Well some times you just need to dive in:
+- The `Export-AdObjects.ps1` will export pipelined objects from `Get-AdUser` or `Get-AdGroup` or `Get-ADOrganizationalUnit`. See examples in `Get-Help` for details!
 - The member list for a group will be cleaned from non-existing principals before used in `Import-AdGroups.ps1`. 
 - It is possible to change the tag character for generic data marking. This is done in `.\LocalLib\ConvertTo-GenericStrings.ps1` **AND**  `.\LocalLib\ConvertFrom-GenericStrings.ps1`
 - The `.\LocalLib\Get-StandardExludeAttributes.ps1` contains a static set of ExcludeAttributres. 
@@ -87,4 +88,4 @@ A version based on ADSI of the export process may be in the making for use on a 
 
 Support for non-inherited access in `ntSecurityDescriptor` is also probably in the cards for the future.
 
-This is the first version, so please report suggestions and/or improvements.
+**Please report suggestions and/or improvements.**

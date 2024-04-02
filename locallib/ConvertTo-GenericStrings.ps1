@@ -6,10 +6,14 @@ function ConvertTo-GenericStrings {
        [string]$InputObject,
        [System.Collections.Specialized.OrderedDictionary]$ReplaceStrings
     )
-    $tag = '¤'
+    $tag = 'ï¿½'
 
     foreach($key in $ReplaceStrings.Keys) {
-        $InputObject=$InputObject -replace [System.Text.RegularExpressions.Regex]::Escape($ReplaceStrings[$key]),($tag + $key + $tag)
+        if ($EscapeJson -and $ReplaceStrings[$key].ToString().Contains('\')) {
+            $InputObject=$InputObject -replace [System.Text.RegularExpressions.Regex]::Escape($ReplaceStrings[$key]),($tag + $key + $tag + "\")
+        } else {            
+            $InputObject=$InputObject -replace [System.Text.RegularExpressions.Regex]::Escape($ReplaceStrings[$key]),($tag + $key + $tag)
+        }
     }
 
     return $InputObject

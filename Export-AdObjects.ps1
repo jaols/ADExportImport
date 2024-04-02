@@ -17,9 +17,13 @@
 	Extra replacements to use for generic content creation (normally part of json settings file)
 .PARAMETER Noreplace
 	Skip all replacements. Generate file in raw format.
+.PARAMETER IncludeAccess
+	Include security settings for exported objects
 
 .Notes
     Author: Jack Olsson 2023-08-02
+    2023-08-11 - Bug corrections
+    2024-04-02 Unified property function and ACL handling
 
 .Example
     Get-AdUser -LDAPfilter "(cn=Jack*)" | Export-AdObjects.ps1 -Verbose
@@ -47,7 +51,8 @@ param (
     [string[]]$ExportOuProperties,
     [string[]]$ExportExcludeAttributes,
     [PSCustomObject]$Replacements,
-    [switch]$NoReplace
+    [switch]$NoReplace,
+    [switch]$IncludeAccess
 )
 
 
@@ -135,13 +140,13 @@ function Get-LocalDefaultVariables {
         $FileName=$scriptPath + "\" + $ReplaceStrings.CompanyName + ".ADobjects." + (Get-Date).ToString("yyyy-MM-dd") + ".json"
     }
 
-    $ObjectList=[ordered]@{}
+    $ObjectList=[System.Text.StringBuilder]::new()
+    [void]$ObjectList.AppendLine("{")
 }
 
 
 Process {
-    #Process operations are run for each object in pipeline processing    
-    $propHash = @{}
+    #Process operations are run for each object in pipeline processing        
     Write-Verbose ("Process " + $AdObject + " [" + $AdObject.GetType().Name + "]")
 
     #Re-bind to object to get correct set of properties?
@@ -168,30 +173,8 @@ Process {
         }
     }
     if (![string]::IsNullOrEmpty($AdObject.distinguishedName)) {
-        foreach($property in $AdObject.psobject.properties.name) {
-            if ($ExportExcludeAttributes -notcontains $property) {
-                #Only process readable props
-                if (![string]::IsNullOrEmpty($AdObject.$property)) {
-                    $value=$AdObject.$property
-                    $type = $value.Gettype()
-                    switch ($type.Name) 
-                    {
-                        "ActiveDirectorySecurity" {
-                            #TODO: Improved support! Only add direct set ACE:s
-                            #$propHash.Add("$property|" + $type.FullName, $value)
-                            break;
-                        }
-                        "ADPropertyValueCollection" {
-                            $propHash.Add("$property|" + $type.FullName, $value)
-                        }
-                        default {
-                            $propHash.Add("$property|" + $type.Name, $value)
-                            break
-                        }                            
-                    }
-                }
-            }
-        }
+        $propHash = Convert-AdProps2Hash -AdObject $AdObject -ExportExcludeAttributes $ExportExcludeAttributes -IncludeAccess:$IncludeAccess
+
         [void]$ObjectList.Append('"')
         [void]$ObjectList.Append(($_.distinguishedName -replace "\\","\\"))
         [void]$ObjectList.Append('":')
@@ -211,9 +194,9 @@ End {
     Write-Verbose ("Save " + $ObjectList.Count + " objects")
     Msg "Save data to $FileName"
     if ($NoReplace) {
-        $ObjectList.ToString() | ConvertTo-GenericStrings -ReplaceStrings $ReplaceStrings | Out-File $FileName
-    } else {
         $ObjectList.ToString() | Out-File $FileName
+    } else {
+        $ObjectList.ToString() | ConvertTo-GenericStrings -ReplaceStrings $ReplaceStrings | Out-File $FileName        
     }
     
     Msg "End Execution"

@@ -13,6 +13,7 @@
     Author: Jack Olsson
     Changes: 
     2023-05-11 New-AdUser cannot create a user with comma in it´s name without the samAccountName option
+    2024-04-02 Unified property function and ACL handling
 #>
 [CmdletBinding(SupportsShouldProcess = $True)]
 param (    
@@ -110,15 +111,15 @@ $stdPassword = ConvertTo-SecureString $StandardUserPassword -AsPlainText -Force
 $ReplaceStrings=Get-ReplaceStrings $Replacements
 $ImportExcludeAttributes+=Get-StandardExludeAttributes -Import
 
-$ObjectList=Get-Content -Path $ImportFile -Raw | ConvertFrom-GenericStrings -ReplaceStrings $ReplaceStrings  | ConvertFrom-Json 
+$ObjectList=Get-Content -Path $ImportFile -Raw | ConvertFrom-GenericStrings -ReplaceStrings $ReplaceStrings -EscapeJson | ConvertFrom-Json 
 
 foreach($objectItem in $ObjectList.psobject.properties.name) {
     Write-Verbose "Process $objectItem"
     $objectProperties=$ObjectList.$objectItem
     
     $targetObject = $null
-    try {
-        $targetObject = Get-ADObject -Identity $objectItem -ErrorAction SilentlyContinue
+    try {        
+        $targetObject = Get-ADObject -Identity $objectItem -Properties nTSecurityDescriptor -ErrorAction SilentlyContinue
     } catch {}    
     
     if (!$targetObject) {
@@ -131,7 +132,11 @@ foreach($objectItem in $ObjectList.psobject.properties.name) {
                 New-ADUser -samAccountName $objectProperties.$samAccountNameProperty -Name $objectProperties.$nameProperty -Path $parentOu -AccountPassword $stdPassword
                 $targetObject=$objectItem
             } catch {
-                Msg ("Failed to create [" + $objectProperties.$nameProperty + "] in $parentOu. $PSItem") -Type ERROR
+                if ($PSItem.Exception.ErrorCode -eq 1318) {
+                    $targetObject = Get-ADUser -Identity $objectProperties.$nameProperty -Properties nTSecurityDescriptor -ErrorAction SilentlyContinue
+                } else {
+                    Msg ("Failed to create [" + $objectProperties.$nameProperty + "] in $parentOu. $PSItem") -Type ERROR
+                }
             }
         }
     }
@@ -148,8 +153,45 @@ foreach($objectItem in $ObjectList.psobject.properties.name) {
                     $value = $objectProperties.$property -as ($typeName -as [type])
                     switch ($typeName) {
                         "System.DirectoryServices.ActiveDirectorySecurity" {
-                            #TODO: Fix support for this
-                            #Only process new entries
+                            $value = $objectProperties.$property
+                            $secDescriptor = $targetObject.$propertyName
+
+                            if ($value.Owner.IndexOf(':') -gt 0) {
+                               $ownerSid=[System.Security.Principal.SecurityIdentifier]$value.Owner.Split(':')[1] 
+                               $secDescriptor.SetOwner($ownerSid)
+                            } else {
+                                $acc=[System.Security.Principal.NTAccount]$value.Owner
+                                try {
+                                    $ownerSid=$acc.Translate([System.Security.Principal.SecurityIdentifier])                                                            
+                                    $secDescriptor.SetOwner($ownerSid)
+                                } catch {
+                                    Msg "Failed to set Owner [$($value.Owner)]. $PSItem" -Type WARNING   
+                                }
+
+                            }
+                            
+                            foreach($ace in $value.Access) {
+                                    try {
+                                        $sid=[System.Security.Principal.SecurityIdentifier]$ace.IdentityReference.Value
+                                        
+                                    } catch {
+                                        $acc=[System.Security.Principal.NTAccount]$ace.IdentityReference.Value
+                                        $sid=$acc.Translate([System.Security.Principal.SecurityIdentifier])
+                                    }
+
+                                    $rule = $secDescriptor.AccessRuleFactory(
+                                        [System.Security.Principal.IdentityReference]$sid, 
+                                        [int]$ace.ActiveDirectoryRights,
+                                        [bool]$false,
+                                        [System.Security.AccessControl.InheritanceFlags]$ace.InheritanceFlags,
+                                        [System.Security.AccessControl.PropagationFlags]$ace.PropagationFlags,
+                                        [System.Security.AccessControl.AccessControlType]$ace.AccessControlType
+                                    )
+
+                                    $secDescriptor.AddAccessRule($rule)
+                            }
+
+                            Set-ACL -Path "AD:$($targetObject.DistinguishedName)" $secDescriptor
                             Break
                         }
                         Default {                            

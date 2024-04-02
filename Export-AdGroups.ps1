@@ -15,8 +15,15 @@
 	Any extra attributes to exclude from export (normally part of json settings file)
 .PARAMETER Replacements
 	Extra replacements to use for generic content creation (normally part of json settings file)
+.PARAMETER NoReplace
+	Save in raw format
+.PARAMETER IncludeAccess
+	Include security settings for exported objects
+
 .Notes
     Author: Jack Olsson 2023-04-12
+    
+    2024-04-02 Unified property function and ACL handling
     
 #>
 [CmdletBinding(SupportsShouldProcess = $False)]
@@ -27,7 +34,8 @@ param (
     [string[]]$ExportGroupProperties,
     [string[]]$ExportExcludeAttributes,
     [PSCustomObject]$Replacements,
-    [switch]$NoReplace
+    [switch]$NoReplace,
+    [switch]$IncludeAccess
 )
 
 #region local functions 
@@ -132,43 +140,16 @@ if ($ExportPaths) {
 
         Msg "Export objects from $Path"
         
-        Get-ADGroup -SearchBase $Path -SearchScope Subtree -Properties $ExportGroupProperties -LDAPFilter $LDAPfilter | ForEach-Object {
-            $propHash = @{}
+        Get-ADGroup -SearchBase $Path -SearchScope Subtree -Properties $ExportGroupProperties -LDAPFilter $LDAPfilter | ForEach-Object {            
             Write-Verbose ("Process " + $_.distinguishedName)
-            foreach($property in $_.psobject.properties.name) {
-                Write-Verbose ("$property")
-                if ($ExportExcludeAttributes -notcontains $property) {
-                    #Only process readable props
-                    if (![string]::IsNullOrEmpty($_.$property)) {
-                        $value=$_.$property
-                        $type = $value.Gettype()
-                        Write-Verbose ("$property|" + $type.FullName)
-                        switch ($type.Name) 
-                        {
-                            "ActiveDirectorySecurity" {
-                                #TODO: Improved support! Only add direct set ACE:s
-                                #$propHash.Add("$property|" + $type.FullName, $value)
-                                break;
-                            }
-                            "ADPropertyValueCollection" {
-                                $propHash.Add("$property|" + $type.FullName, $value)
-                            }
-                            default {
-                                $propHash.Add("$property|" + $type.Name, $value)
-                                break
-                            }
-                        }
-                    }
-                }
-            }
-            #$ObjectList.Add($_.distinguishedName,$propHash)
+            $propHash = Convert-AdProps2Hash -AdObject $_ -ExportExcludeAttributes $ExportExcludeAttributes -IncludeAccess:$IncludeAccess
+
             [void]$ObjectList.Append('"')
             [void]$ObjectList.Append(($_.distinguishedName -replace "\\","\\"))
             [void]$ObjectList.Append('":')
             [void]$ObjectList.Append(($propHash | ConvertTo-Json -Depth 4 -Compress))
             [void]$ObjectList.AppendLine(',')
-            #[void]$ObjectList.AppendLine("}")
-            #$ObjectList.ToString() | ConvertTo-GenericStrings -ReplaceStrings $ReplaceStrings | Out-File $FileName
+
             #Exit
         }
     }
@@ -178,7 +159,10 @@ if ($ExportPaths) {
 [void]$ObjectList.AppendLine("}")
 
 Msg "Save data to $FileName"
-$ObjectList.ToString() | ConvertTo-GenericStrings -ReplaceStrings $ReplaceStrings | Out-File $FileName
-
+if ($NoReplace) {
+    $ObjectList.ToString() | Out-File $FileName
+} else {   
+    $ObjectList.ToString() | ConvertTo-GenericStrings -ReplaceStrings $ReplaceStrings | Out-File $FileName
+}
 
 Msg "End Execution"

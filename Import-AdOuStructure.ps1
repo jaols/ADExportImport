@@ -12,6 +12,7 @@
 .Notes
     Author: Jack Olsson
     Changes:
+    2024-04-02 Unified property function and ACL handling
 #>
 [CmdletBinding(SupportsShouldProcess = $True)]
 param (    
@@ -144,8 +145,46 @@ foreach($objectItem in $ObjectList.psobject.properties.name) {
                     $value = $objectProperties.$property -as ($typeName -as [type])
                     switch ($typeName) {
                         "System.DirectoryServices.ActiveDirectorySecurity" {
-                            #TODO: Fix support for this
-                            #Only process new entries
+                            $value = $objectProperties.$property
+                            $secDescriptor = $targetObject.$propertyName
+
+                            if ($value.Owner.IndexOf(':') -gt 0) {
+                               $ownerSid=[System.Security.Principal.SecurityIdentifier]$value.Owner.Split(':')[1] 
+                               $secDescriptor.SetOwner($ownerSid)
+                            } else {
+                                $acc=[System.Security.Principal.NTAccount]$value.Owner
+                                try {
+                                    $ownerSid=$acc.Translate([System.Security.Principal.SecurityIdentifier])                                                            
+                                    $secDescriptor.SetOwner($ownerSid)
+                                } catch {
+                                    Msg "Failed to set Owner [$($value.Owner)]. $PSItem" -Type WARNING   
+                                }
+
+                            }
+                            
+                            foreach($ace in $value.Access) {
+                                    try {
+                                        $sid=[System.Security.Principal.SecurityIdentifier]$ace.IdentityReference.Value
+                                        
+                                    } catch {
+                                        $acc=[System.Security.Principal.NTAccount]$ace.IdentityReference.Value
+                                        $sid=$acc.Translate([System.Security.Principal.SecurityIdentifier])
+                                    }
+
+                                    $rule = $secDescriptor.AccessRuleFactory(
+                                        [System.Security.Principal.IdentityReference]$sid, 
+                                        [int]$ace.ActiveDirectoryRights,
+                                        [bool]$false,
+                                        [System.Security.AccessControl.InheritanceFlags]$ace.InheritanceFlags,
+                                        [System.Security.AccessControl.PropagationFlags]$ace.PropagationFlags,
+                                        [System.Security.AccessControl.AccessControlType]$ace.AccessControlType
+                                    )
+
+                                    $secDescriptor.AddAccessRule($rule)
+                            }
+
+                            Set-ACL -Path "AD:$($targetObject.DistinguishedName)" $secDescriptor
+
                             Break
                         }
                         Default {

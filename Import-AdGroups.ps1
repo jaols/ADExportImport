@@ -12,6 +12,7 @@
 .Notes
     Author: Jack Olsson
     
+    2024-04-02 Unified property function and ACL handling
 #>
 [CmdletBinding(SupportsShouldProcess = $True)]
 param (    
@@ -113,7 +114,7 @@ foreach($objectItem in $ObjectList.psobject.properties.name) {
     
     $targetObject = $null
     try {
-        $targetObject = Get-ADObject -Identity $objectItem -ErrorAction SilentlyContinue
+        $targetObject = Get-ADObject -Identity $objectItem -Properties nTSecurityDescriptor -ErrorAction SilentlyContinue
     } catch {}    
     
     if (!$targetObject) {
@@ -127,7 +128,7 @@ foreach($objectItem in $ObjectList.psobject.properties.name) {
                 $targetObject=$objectItem
             } catch {
                 if ($PSItem.Exception.ErrorCode -eq 1318) {
-                   $targetObject = Get-ADGroup -Identity $objectProperties.$nameProperty -ErrorAction SilentlyContinue
+                   $targetObject = Get-ADGroup -Identity $objectProperties.$nameProperty -Properties nTSecurityDescriptor -ErrorAction SilentlyContinue
                 } else {
                     Msg ("Failed to create [" + $objectProperties.$nameProperty + "] in $parentOu. $PSItem") -Type ERROR
                     continue
@@ -150,8 +151,46 @@ foreach($objectItem in $ObjectList.psobject.properties.name) {
                     Write-Verbose "Set $property"
                     switch ($typeName) {
                         "System.DirectoryServices.ActiveDirectorySecurity" {
-                            #TODO: Fix support for this
-                            #Only process new entries
+                            $value = $objectProperties.$property
+                            $secDescriptor = $targetObject.$propertyName
+
+                            if ($value.Owner.IndexOf(':') -gt 0) {
+                               $ownerSid=[System.Security.Principal.SecurityIdentifier]$value.Owner.Split(':')[1] 
+                               $secDescriptor.SetOwner($ownerSid)
+                            } else {
+                                $acc=[System.Security.Principal.NTAccount]$value.Owner
+                                try {
+                                    $ownerSid=$acc.Translate([System.Security.Principal.SecurityIdentifier])                                                            
+                                    $secDescriptor.SetOwner($ownerSid)
+                                } catch {
+                                    Msg "Failed to set Owner [$($value.Owner)]. $PSItem" -Type WARNING   
+                                }
+
+                            }
+                            
+                            foreach($ace in $value.Access) {
+                                    try {
+                                        $sid=[System.Security.Principal.SecurityIdentifier]$ace.IdentityReference.Value
+                                        
+                                    } catch {
+                                        $acc=[System.Security.Principal.NTAccount]$ace.IdentityReference.Value
+                                        $sid=$acc.Translate([System.Security.Principal.SecurityIdentifier])
+                                    }
+
+                                    $rule = $secDescriptor.AccessRuleFactory(
+                                        [System.Security.Principal.IdentityReference]$sid, 
+                                        [int]$ace.ActiveDirectoryRights,
+                                        [bool]$false,
+                                        [System.Security.AccessControl.InheritanceFlags]$ace.InheritanceFlags,
+                                        [System.Security.AccessControl.PropagationFlags]$ace.PropagationFlags,
+                                        [System.Security.AccessControl.AccessControlType]$ace.AccessControlType
+                                    )
+
+                                    $secDescriptor.AddAccessRule($rule)
+                            }
+
+                            Set-ACL -Path "AD:$($targetObject.DistinguishedName)" $secDescriptor
+                            
                             Break
                         }
                         Default {                            
@@ -160,6 +199,7 @@ foreach($objectItem in $ObjectList.psobject.properties.name) {
                                 #for (<Init>; <Condition>; <Repeat>)
                                 Write-Verbose ("Members to set: " + $value.Count)
                                 for ($n = $value.Count-1; $n -gt -1; $n--) {
+                                    #Check if principal exists (member must exist in the correct OU)
                                     $principal = $null
                                     try {
                                         $principal = Get-ADObject -Identity $value[$n] -Properties Name
@@ -173,13 +213,21 @@ foreach($objectItem in $ObjectList.psobject.properties.name) {
                                 if ($value.Count -eq 1) {
                                     $value = [string]$value[0]
                                 }
-                            }
 
-                            Try {
-                                #Set property one-by-one at this stage
-                                Set-ADGroup -Identity $targetObject -Add @{$propertyName=$value}
-                            } Catch {
-                                Msg "Failed to set [$propertyName]. $PSItem" -Type WARNING
+                                Try {                                    
+                                    Set-ADGroup -Identity $targetObject -Add @{$propertyName=[array]$value}
+                                } Catch {
+                                    Msg "Failed to set member list. $PSItem" -Type WARNING
+                                }
+
+                            } else {
+
+                                Try {
+                                    #Set property one-by-one at this stage
+                                    Set-ADGroup -Identity $targetObject -Add @{$propertyName=$value}
+                                } Catch {
+                                    Msg "Failed to set [$propertyName]. $PSItem" -Type WARNING
+                                }
                             }
                             Break
                         }

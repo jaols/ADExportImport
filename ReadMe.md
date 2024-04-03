@@ -22,7 +22,7 @@ Because we don't want to purchase a full service solution at this time. We just 
 ## Requirements
 The solution is based on the PSJumpStart module found in [Powershell Gallery](https://www.powershellgallery.com/packages/PSJumpStart) or [GitHub](https://github.com/jaols/PSJumpStart/tree/master/PSJumpStart).
 
-The PowerShell [Active Directory Module](https://learn.microsoft.com/en-us/powershell/module/activedirectory/?view=windowsserver2022-ps)
+The PowerShell [Active Directory Module](https://learn.microsoft.com/en-us/powershell/module/activedirectory/?view=windowsserver2022-ps) is needed for importing objects. Exports can be done using ADSI.
 
 ## Installation
 Install the PSJumpStart module from [Powershell Gallery](https://www.powershellgallery.com/packages/PSJumpStart) and install the [Active Directory Module](https://4sysops.com/wiki/how-to-install-the-powershell-active-directory-module/)
@@ -84,8 +84,6 @@ Well some times you just need to dive in:
 - The `.\LocalLib\Get-StandardExludeAttributes.ps1` contains a static set of ExcludeAttributres. 
 
 ## Known issues
-A version based on ADSI of the export process may be in the making for use on a Windows client without the ActiveDirectory module.
-
-Support for non-inherited access in `ntSecurityDescriptor` is also probably in the cards for the future.
+The support of non-inherited access in `ntSecurityDescriptor` has not been tested that much.
 
 **Please report suggestions and/or improvements.**

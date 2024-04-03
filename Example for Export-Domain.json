@@ -21,7 +21,7 @@
         "ou",
         "ProtectedFromAccidentalDeletion"
     ],
-    "ExportGroupProperties": [
+    "ExportGroupProperties": [        
         "CanonicalName",
         "CN",
         "Description",
@@ -101,6 +101,7 @@
         "UserPrincipalName"
     ],
     "ExportExcludeAttributes": [
+        "adspath"
     ],    
     "ExcludePrincipals": [
         "Account Operators",

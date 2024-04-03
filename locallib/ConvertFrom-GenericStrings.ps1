@@ -1,4 +1,4 @@
-function ConvertFrom-GenericStrings {
+﻿function ConvertFrom-GenericStrings {
     [CmdletBinding(SupportsShouldProcess = $False)]
     param(
        [Parameter(ValueFromPipeline = $true,
@@ -6,7 +6,7 @@ function ConvertFrom-GenericStrings {
        [string]$InputObject,
        [System.Collections.Specialized.OrderedDictionary]$ReplaceStrings
     )
-    $tag = '�'
+    $tag = '¤'
 
     foreach($key in $ReplaceStrings.Keys) {
         if ($EscapeJson -and $ReplaceStrings[$key].ToString().Contains('\')) {

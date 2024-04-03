@@ -1,15 +1,15 @@
  <#
 .Synopsis
-    Export groups from current AD tree
+    Export users from current AD tree using AdsiSearcher
 .DESCRIPTION
-    Export groups to a target file. The file will be washed from local AD names.
+    Export users to a target file. The file will be washed from local AD names.
 .PARAMETER FileName
    	Filename to write result to.
 .PARAMETER LDAPfilter
-   	Limit objects to export
+   	Limit objects to export (NOTE:You need to include (&(objectClass=user)(objectCategory=person)) in a custom filter) 
 .PARAMETER ExportPaths
 	List of distinguished names to export (normally part of json settings file)
-.PARAMETER ExportGroupProperties
+.PARAMETER ExportUserProperties
 	Attributes to include in export (normally part of json settings file)
 .PARAMETER ExportExcludeAttributes
 	Any extra attributes to exclude from export (normally part of json settings file)
@@ -21,15 +21,15 @@
 	Include security settings for exported objects
 
 .Notes
-    Author: Jack Olsson 2023-04-12
-    
+    Author: Jack Olsson 2024-04-03
+
 #>
 [CmdletBinding(SupportsShouldProcess = $False)]
 param (
     [string]$FileName,
     [string]$LDAPfilter,
     [string[]]$ExportPaths,
-    [string[]]$ExportGroupProperties,
+    [string[]]$ExportUserProperties,
     [string[]]$ExportExcludeAttributes,
     [PSCustomObject]$Replacements,
     [switch]$NoReplace,
@@ -103,8 +103,6 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
     Import-Module PSJumpStart -Force -MinimumVersion 1.2.6
 #}
 
-Import-Module ActiveDirectory
-
 #Get Local variable default values from external DFP-files
 Get-LocalDefaultVariables($MyInvocation)
 
@@ -116,7 +114,7 @@ $PSDefaultParameterValues = Get-GlobalDefaultsFromJsonFiles $MyInvocation -Verbo
 Msg "Start Execution"
 
 if ([string]::IsNullOrEmpty($LDAPfilter)) {
-    $LDAPfilter="(name=*)"
+    $LDAPfilter="(&(objectClass=user)(objectCategory=person))"
 }
 
 $ReplaceStrings=Get-ReplaceStrings $Replacements
@@ -124,7 +122,7 @@ $ReplaceStrings=Get-ReplaceStrings $Replacements
 $ExportExcludeAttributes+=Get-StandardExludeAttributes -Export
 
 if ([string]::IsNullOrEmpty($FileName)) {
-    $FileName=$scriptPath + "\" + $ReplaceStrings.CompanyName + ".Groups." + (Get-Date).ToString("yyyy-MM-dd") + ".json"
+    $FileName=$scriptPath + "\" + $ReplaceStrings.CompanyName + ".Users." + (Get-Date).ToString("yyyy-MM-dd") + ".json"
 }
 
 
@@ -137,17 +135,23 @@ if ($ExportPaths) {
         $Path=ConvertFrom-GenericStrings -InputObject $Path -ReplaceStrings $ReplaceStrings 
 
         Msg "Export objects from $Path"
-        
-        Get-ADGroup -SearchBase $Path -SearchScope Subtree -Properties $ExportGroupProperties -LDAPFilter $LDAPfilter | ForEach-Object {            
-            Write-Verbose ("Process " + $_.distinguishedName)
-            $propHash = Convert-AdProps2Hash -AdObject $_ -ExportExcludeAttributes $ExportExcludeAttributes -IncludeAccess:$IncludeAccess
+
+        $searcher = [adsisearcher]::new()
+        $searcher.Filter = $LDAPfilter
+        $searcher.PropertiesToLoad.AddRange($ExportUserProperties)
+        $searcher.SearchRoot=[adsi]"LDAP://$Path"
+
+        #Get-ADUser -SearchBase $Path -SearchScope Subtree -Properties $ExportUserProperties -LDAPFilter $LDAPfilter | ForEach-Object {            
+        $searcher.FindAll() | ForEach-Object {
+            Write-Verbose ("Process " + $_.Path)
+            $propHash = Convert-AdsiProps2Hash -AdsiProperties $_.Properties -ExportExcludeAttributes $ExportExcludeAttributes -IncludeAccess:$IncludeAccess
 
             [void]$ObjectList.Append('"')
-            [void]$ObjectList.Append(($_.distinguishedName -replace "\\","\\"))
+            [void]$ObjectList.Append(($_.Properties.distinguishedname[0] -replace "\\","\\"))
             [void]$ObjectList.Append('":')
             [void]$ObjectList.Append(($propHash | ConvertTo-Json -Depth 4 -Compress))
             [void]$ObjectList.AppendLine(',')
-
+                        
             #Exit
         }
     }
@@ -160,7 +164,9 @@ Msg "Save data to $FileName"
 if ($NoReplace) {
     $ObjectList.ToString() | Out-File $FileName
 } else {   
-    $ObjectList.ToString() | ConvertTo-GenericStrings -ReplaceStrings $ReplaceStrings | Out-File $FileName
+    $ObjectList.ToString() | ConvertTo-GenericStrings -ReplaceStrings $ReplaceStrings -EscapeJson | Out-File $FileName
 }
+
+
 
 Msg "End Execution"

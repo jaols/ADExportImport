@@ -1,12 +1,12 @@
  <#
 .Synopsis
-    Export groups from current AD tree
+    Export groups from current AD tree using AdsiSearcher
 .DESCRIPTION
     Export groups to a target file. The file will be washed from local AD names.
 .PARAMETER FileName
    	Filename to write result to.
 .PARAMETER LDAPfilter
-   	Limit objects to export
+   	Limit objects to export (NOTE:You need to include (objectClass=group) in a custom filter)
 .PARAMETER ExportPaths
 	List of distinguished names to export (normally part of json settings file)
 .PARAMETER ExportGroupProperties
@@ -21,7 +21,7 @@
 	Include security settings for exported objects
 
 .Notes
-    Author: Jack Olsson 2023-04-12
+    Author: Jack Olsson 2024-04-03
     
 #>
 [CmdletBinding(SupportsShouldProcess = $False)]
@@ -103,8 +103,6 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
     Import-Module PSJumpStart -Force -MinimumVersion 1.2.6
 #}
 
-Import-Module ActiveDirectory
-
 #Get Local variable default values from external DFP-files
 Get-LocalDefaultVariables($MyInvocation)
 
@@ -116,7 +114,8 @@ $PSDefaultParameterValues = Get-GlobalDefaultsFromJsonFiles $MyInvocation -Verbo
 Msg "Start Execution"
 
 if ([string]::IsNullOrEmpty($LDAPfilter)) {
-    $LDAPfilter="(name=*)"
+    #$LDAPfilter="(name=*)"
+    $LDAPfilter="(objectClass=group)"
 }
 
 $ReplaceStrings=Get-ReplaceStrings $Replacements
@@ -137,13 +136,18 @@ if ($ExportPaths) {
         $Path=ConvertFrom-GenericStrings -InputObject $Path -ReplaceStrings $ReplaceStrings 
 
         Msg "Export objects from $Path"
+                
+        $searcher = [adsisearcher]::new()
+        $searcher.Filter = $LDAPfilter
+        $searcher.PropertiesToLoad.AddRange($ExportGroupProperties)
+        $searcher.SearchRoot=[adsi]"LDAP://$Path"
         
-        Get-ADGroup -SearchBase $Path -SearchScope Subtree -Properties $ExportGroupProperties -LDAPFilter $LDAPfilter | ForEach-Object {            
-            Write-Verbose ("Process " + $_.distinguishedName)
-            $propHash = Convert-AdProps2Hash -AdObject $_ -ExportExcludeAttributes $ExportExcludeAttributes -IncludeAccess:$IncludeAccess
+        $searcher.FindAll() | ForEach-Object {                                    
+            Write-Verbose ("Process " + $_.Path)
+            $propHash = Convert-AdsiProps2Hash -AdsiProperties $_.Properties -ExportExcludeAttributes $ExportExcludeAttributes -IncludeAccess:$IncludeAccess
 
-            [void]$ObjectList.Append('"')
-            [void]$ObjectList.Append(($_.distinguishedName -replace "\\","\\"))
+            [void]$ObjectList.Append('"')            
+            [void]$ObjectList.Append(($_.Properties.distinguishedname[0] -replace "\\","\\"))
             [void]$ObjectList.Append('":')
             [void]$ObjectList.Append(($propHash | ConvertTo-Json -Depth 4 -Compress))
             [void]$ObjectList.AppendLine(',')

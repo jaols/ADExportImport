@@ -106,7 +106,8 @@ $nameProperty="Name|String"
 $ReplaceStrings=Get-ReplaceStrings $Replacements
 $ImportExcludeAttributes+=Get-StandardExludeAttributes -Import
 
-$ObjectList=Get-Content -Path $ImportFile -Raw | ConvertFrom-GenericStrings -ReplaceStrings $ReplaceStrings  | ConvertFrom-Json 
+$ObjectList=Get-Content -Path $ImportFile -Raw | ConvertFrom-GenericStrings -ReplaceStrings $ReplaceStrings  #| ConvertFrom-Json 
+$ObjectList=$ObjectList | ConvertFrom-Json 
 
 foreach($objectItem in $ObjectList.psobject.properties.name) {
     Write-Verbose "Process $objectItem"

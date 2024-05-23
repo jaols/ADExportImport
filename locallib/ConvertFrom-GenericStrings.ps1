@@ -4,7 +4,8 @@
        [Parameter(ValueFromPipeline = $true,
                ValueFromPipelineByPropertyName=$true)]
        [string]$InputObject,
-       [System.Collections.Specialized.OrderedDictionary]$ReplaceStrings
+       [System.Collections.Specialized.OrderedDictionary]$ReplaceStrings,
+       [Switch]$EscapeJson
     )
     $tag = '¤'
 
